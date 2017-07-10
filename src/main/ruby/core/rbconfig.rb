@@ -141,43 +141,42 @@ module RbConfig
     mkconfig['topdir'] = '$(archdir)'
   end
 
-  sulong_home = ENV['SULONG_HOME']
-  if sulong_home
-    clang          = 'clang'
-    opt            = 'opt'
-    opt_passes     = ['-always-inline', '-mem2reg', '-constprop'].join(' ')
-    sulong_include = File.join sulong_home, 'include'
-    cc             = "#{clang} -I#{sulong_include}"
-    cpp            = cc
-    cflags         = ['-Werror=implicit-function-declaration',  # To make missing C ext functions very clear
-                      '-Wno-unknown-warning-option',            # If we're on an earlier version of clang without a warning option, ignore it
-                      '-Wno-int-conversion',                    # MRI has VALUE defined as long while we have it as void*
-                      '-Wno-int-to-pointer-cast',               # Same as above
-                      '-Wno-macro-redefined',                   # We redefine __DARWIN_ALIAS_C
-                      '-Wno-unused-value',                      # RB_GC_GUARD leaves
-                      '-Wno-incompatible-pointer-types',        # We define VALUE as void* rather than uint32_t
-                      '-Wno-expansion-to-defined',              # The openssl C extension uses macros expanding to defined
-                      '-c', '-emit-llvm'].join(' ')
-
-    common = {
-      'CC' => cc,
-      'CPP' => cpp,
-      'CFLAGS' => cflags,
-    }
-    expanded.merge!(common)
-    mkconfig.merge!(common)
-
-    expanded['COMPILE_C'] = "ruby #{libdir}/cext/preprocess.rb < $< | #{cc} $(INCFLAGS) #{cppflags} #{cflags} $(COUTFLAG) -xc - -o $@ && #{opt} #{opt_passes} $@ -o $@",
-    mkconfig['COMPILE_C'] = "ruby #{libdir}/cext/preprocess.rb < $< | $(CC) $(INCFLAGS) $(CPPFLAGS) $(CFLAGS) $(COUTFLAG) -xc - -o $@ && #{opt} #{opt_passes} $@ -o $@",
-    expanded['LINK_SO'] = "mx -v -p #{sulong_home} su-link -o $@ $(OBJS) #{libs}"
-    mkconfig['LINK_SO'] = "mx -v -p #{sulong_home} su-link -o $@ $(OBJS) $(LIBS)"
-    expanded['TRY_LINK'] = "#{clang} $(src) $(INCFLAGS) #{cflags} -I#{sulong_include} #{libs}"
-    mkconfig['TRY_LINK'] = "#{clang} $(src) $(INCFLAGS) $(CFLAGS) -I#{sulong_include} $(LIBS)"
+  clang          = 'clang'
+  opt            = 'opt'
+  opt_passes     = ['-always-inline', '-mem2reg', '-constprop'].join(' ')
+  cc             = clang
+  cpp            = cc
+  cflags         = ['-Werror=implicit-function-declaration',  # To make missing C ext functions very clear
+                    '-Wno-unknown-warning-option',            # If we're on an earlier version of clang without a warning option, ignore it
+                    '-Wno-int-conversion',                    # MRI has VALUE defined as long while we have it as void*
+                    '-Wno-int-to-pointer-cast',               # Same as above
+                    '-Wno-macro-redefined',                   # We redefine __DARWIN_ALIAS_C
+                    '-Wno-unused-value',                      # RB_GC_GUARD leaves
+                    '-Wno-incompatible-pointer-types',        # We define VALUE as void* rather than uint32_t
+                    '-Wno-expansion-to-defined',              # The openssl C extension uses macros expanding to defined
+                    '-c', '-emit-llvm'].join(' ')
+  ruby_launcher = Truffle::Boot.ruby_launcher
+  unless ruby_launcher
+    raise "we can't find the TruffleRuby launcher - set -Xlauncher=, or your launcher should be doing this for you"
   end
 
+  common = {
+    'CC' => cc,
+    'CPP' => cpp,
+    'CFLAGS' => cflags,
+  }
+  expanded.merge!(common)
+  mkconfig.merge!(common)
+
+  expanded['COMPILE_C'] = "ruby #{libdir}/cext/preprocess.rb < $< | #{cc} $(INCFLAGS) #{cppflags} #{cflags} $(COUTFLAG) -xc - -o $@ && #{opt} #{opt_passes} $@ -o $@",
+  mkconfig['COMPILE_C'] = "ruby #{libdir}/cext/preprocess.rb < $< | $(CC) $(INCFLAGS) $(CPPFLAGS) $(CFLAGS) $(COUTFLAG) -xc - -o $@ && #{opt} #{opt_passes} $@ -o $@",
+  expanded['LINK_SO'] = "#{ruby_launcher} -e Truffle::CExt::Linker.main -- -o $@ $(OBJS) #{libs}"
+  mkconfig['LINK_SO'] = "#{ruby_launcher} -e Truffle::CExt::Linker.main -- -o $@ $(OBJS) $(LIBS)"
+  expanded['TRY_LINK'] = "#{clang} $(src) $(INCFLAGS) #{cflags} #{libs}"
+  mkconfig['TRY_LINK'] = "#{clang} $(src) $(INCFLAGS) $(CFLAGS) $(LIBS)"
+
   def self.ruby
-    Truffle::Boot.ruby_launcher or
-        raise "we can't find the TruffleRuby launcher - set -Xlauncher=, or your launcher should be doing this for you"
+    Truffle::Boot.ruby_launcher
   end
 
   def RbConfig.expand(val, config = CONFIG)
