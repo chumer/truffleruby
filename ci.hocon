@@ -44,6 +44,7 @@ common: ${common-base} {
     git:        ">=1.8.3"
     mercurial:  ">=3.2.4"
     ruby:       ">=2.1.0"
+    llvm:       "==3.8"
   }
 }
 
@@ -52,6 +53,7 @@ common-darwin: ${common-base} {
     # Homebrew doesn't support versions.
     mercurial: ""
     ruby: ""
+    llvm: ""
   }
 }
 
@@ -128,10 +130,6 @@ graal-enterprise-no-om: {
 }
 
 sulong: ${labsjdk8} {
-  packages: {
-    llvm: "==3.8"
-  }
-
   downloads: {
     LIBGMP: {
       name: libgmp,
